@@ -23,6 +23,15 @@ in
           '';
       };
 
+    unpriv =
+      lib.mkOption {
+        type = lib.types.bool;
+        default = false;
+        description = ''
+            Enables the option to have unprivileged container.
+          '';
+      };
+
     systemConfig =
       lib.mkOption {
         type = lib.types.lines;
@@ -73,5 +82,39 @@ in
         include ${cfg.package}/etc/apparmor.d/lxc-containers
       '';
     };
+
+    # `lxc-user-nic` needs suid to attach to bridge for unpriv containers.
+    security.wrappers = lib.mkIf cfg.unpriv {
+      lxcUserNet = {
+        source = "${pkgs.lxc}/libexec/lxc/lxc-user-nic";
+        setuid = true;
+        owner = "root";
+        group = "root";
+        program = "lxc-user-nic";
+      };
+    };
+
+  # Create lxc-net service if unpriv mode is enabled.
+  # This service will create the lxc bridge, default is: lxcbr0.
+    systemd.services = lib.mkIf cfg.unpriv {
+      lxc-net = {
+        enable = true;
+        description = "LXC network bridge setup";
+        wantedBy = [ "multi-user.target" ];
+        before = [ "lxc.service" ];
+        after = [ "network-online.target" ];
+        documentation = [ "man:lxc" ];
+        unitConfig = {
+          ConditionVirtualization = "!lxc";
+        };
+        path = [ pkgs.iproute2 pkgs.iptables pkgs.getent pkgs.dnsmasq ];
+        serviceConfig = {
+          Type = "oneshot";
+          RemainAfterExit = "yes";
+          ExecStart = "${pkgs.lxc}/libexec/lxc/lxc-net start";
+          ExecStop = "${pkgs.lxc}/libexec/lxc/lxc-net stop";
+        };
+      };
+    }
   };
 }

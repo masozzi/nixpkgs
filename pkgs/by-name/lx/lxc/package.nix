@@ -51,6 +51,10 @@ stdenv.mkDerivation (finalAttrs: {
 
     # fix linking
     ./4428.diff
+
+    # Fix hardcoded path of lxc-user-nic
+    # This is needed to use unprivileged containers
+    ./user-nic.diff
   ];
 
   mesonFlags = [
